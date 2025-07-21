@@ -5,7 +5,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
 
 interface TimeEntryPanelProps {
   date: Date;
@@ -16,23 +18,116 @@ interface TimeEntryPanelProps {
 interface TimeEntry {
   id: string;
   project: string;
+  projectId: string;
   stage: string;
+  stageId: string;
   task: string;
+  taskId: string;
   hours: number;
   minutes: number;
+}
+
+interface Project {
+  id: string;
+  name: string;
+  status: 'aberto' | 'fechado';
+}
+
+interface Stage {
+  id: string;
+  name: string;
+  project_id: string;
+}
+
+interface Task {
+  id: string;
+  name: string;
+  stage_id: string;
 }
 
 export default function TimeEntryPanel({ date, onClose, onSave }: TimeEntryPanelProps) {
   const [totalHours, setTotalHours] = useState(8);
   const [totalMinutes, setTotalMinutes] = useState(0);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [stages, setStages] = useState<Stage[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [newEntry, setNewEntry] = useState<Partial<TimeEntry>>({
     project: '',
+    projectId: '',
     stage: '',
+    stageId: '',
     task: '',
+    taskId: '',
     hours: 0,
     minutes: 0,
   });
+
+  useEffect(() => {
+    loadProjects();
+  }, []);
+
+  useEffect(() => {
+    if (newEntry.projectId) {
+      loadStages(newEntry.projectId);
+    } else {
+      setStages([]);
+      setTasks([]);
+    }
+  }, [newEntry.projectId]);
+
+  useEffect(() => {
+    if (newEntry.stageId) {
+      loadTasks(newEntry.stageId);
+    } else {
+      setTasks([]);
+    }
+  }, [newEntry.stageId]);
+
+  const loadProjects = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('id, name, status')
+        .eq('status', 'aberto')
+        .order('name');
+
+      if (error) throw error;
+      setProjects((data as Project[]) || []);
+    } catch (error) {
+      console.error('Error loading projects:', error);
+    }
+  };
+
+  const loadStages = async (projectId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('stages')
+        .select('id, name, project_id')
+        .eq('project_id', projectId)
+        .order('name');
+
+      if (error) throw error;
+      setStages(data || []);
+    } catch (error) {
+      console.error('Error loading stages:', error);
+    }
+  };
+
+  const loadTasks = async (stageId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('id, name, stage_id')
+        .eq('stage_id', stageId)
+        .order('name');
+
+      if (error) throw error;
+      setTasks(data || []);
+    } catch (error) {
+      console.error('Error loading tasks:', error);
+    }
+  };
 
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat('pt-BR', {
@@ -55,8 +150,11 @@ export default function TimeEntryPanel({ date, onClose, onSave }: TimeEntryPanel
     const entry: TimeEntry = {
       id: Math.random().toString(36).substr(2, 9),
       project: newEntry.project || '',
+      projectId: newEntry.projectId || '',
       stage: newEntry.stage || '',
+      stageId: newEntry.stageId || '',
       task: newEntry.task || '',
+      taskId: newEntry.taskId || '',
       hours: newEntry.hours || 0,
       minutes: newEntry.minutes || 0,
     };
@@ -64,8 +162,11 @@ export default function TimeEntryPanel({ date, onClose, onSave }: TimeEntryPanel
     setEntries([...entries, entry]);
     setNewEntry({
       project: '',
+      projectId: '',
       stage: '',
+      stageId: '',
       task: '',
+      taskId: '',
       hours: 0,
       minutes: 0,
     });
@@ -89,7 +190,7 @@ export default function TimeEntryPanel({ date, onClose, onSave }: TimeEntryPanel
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-end z-50">
-      <div className="bg-card w-full max-w-md h-full overflow-y-auto shadow-xl border-l border-border">
+      <div className="bg-card w-full max-w-lg h-full overflow-y-auto shadow-xl border-l border-border">
         <div className="p-6 space-y-6">
           {/* Header */}
           <div className="flex items-center justify-between">
@@ -168,30 +269,86 @@ export default function TimeEntryPanel({ date, onClose, onSave }: TimeEntryPanel
             <CardContent className="space-y-3">
               <div>
                 <Label htmlFor="project">Projeto *</Label>
-                <Input
-                  id="project"
-                  placeholder="Nome do projeto"
-                  value={newEntry.project}
-                  onChange={(e) => setNewEntry({ ...newEntry, project: e.target.value })}
-                />
+                <Select
+                  value={newEntry.projectId}
+                  onValueChange={(value) => {
+                    const selectedProject = projects.find(p => p.id === value);
+                    setNewEntry({ 
+                      ...newEntry, 
+                      projectId: value, 
+                      project: selectedProject?.name || '',
+                      stageId: '',
+                      stage: '',
+                      taskId: '',
+                      task: ''
+                    });
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um projeto" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label htmlFor="stage">Etapa</Label>
-                <Input
-                  id="stage"
-                  placeholder="Etapa do projeto"
-                  value={newEntry.stage}
-                  onChange={(e) => setNewEntry({ ...newEntry, stage: e.target.value })}
-                />
+                <Select
+                  value={newEntry.stageId}
+                  onValueChange={(value) => {
+                    const selectedStage = stages.find(s => s.id === value);
+                    setNewEntry({ 
+                      ...newEntry, 
+                      stageId: value, 
+                      stage: selectedStage?.name || '',
+                      taskId: '',
+                      task: ''
+                    });
+                  }}
+                  disabled={!newEntry.projectId}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione uma etapa" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {stages.map((stage) => (
+                      <SelectItem key={stage.id} value={stage.id}>
+                        {stage.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div>
                 <Label htmlFor="task">Tarefa</Label>
-                <Input
-                  id="task"
-                  placeholder="Descrição da tarefa"
-                  value={newEntry.task}
-                  onChange={(e) => setNewEntry({ ...newEntry, task: e.target.value })}
-                />
+                <Select
+                  value={newEntry.taskId}
+                  onValueChange={(value) => {
+                    const selectedTask = tasks.find(t => t.id === value);
+                    setNewEntry({ 
+                      ...newEntry, 
+                      taskId: value, 
+                      task: selectedTask?.name || ''
+                    });
+                  }}
+                  disabled={!newEntry.stageId}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione uma tarefa" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {tasks.map((task) => (
+                      <SelectItem key={task.id} value={task.id}>
+                        {task.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>

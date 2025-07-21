@@ -107,21 +107,21 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             {/* Calendar Grid */}
-            <div className="grid grid-cols-7 gap-2 mb-4">
+            <div className="grid grid-cols-7 gap-1 mb-4">
               {DAYS.map((day) => (
                 <div
                   key={day}
-                  className="p-2 text-center text-sm font-medium text-muted-foreground"
+                  className="p-1 text-center text-xs font-medium text-muted-foreground"
                 >
                   {day}
                 </div>
               ))}
             </div>
             
-            <div className="grid grid-cols-7 gap-2">
+            <div className="grid grid-cols-7 gap-1">
               {calendarDays.map((day, index) => {
                 if (!day) {
-                  return <div key={index} className="p-2 h-12"></div>;
+                  return <div key={index} className="p-1 h-10"></div>;
                 }
 
                 const status = getDateStatus(day);
@@ -132,7 +132,7 @@ export default function Dashboard() {
                     key={day}
                     onClick={() => handleDateClick(day)}
                     className={cn(
-                      "p-2 h-12 rounded-lg text-sm font-medium transition-all hover:scale-105 hover:shadow-md",
+                      "p-1 h-10 rounded-md text-xs font-medium transition-all hover:scale-105 hover:shadow-md",
                       "border border-transparent",
                       isTodayDate && "ring-2 ring-primary ring-offset-2",
                       status === 'complete' && "bg-success text-success-foreground",

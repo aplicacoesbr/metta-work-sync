@@ -2,13 +2,13 @@ import { useAuth } from '@/hooks/useAuth';
 import { Navigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { LogOut, Calendar, Users, Clock } from 'lucide-react';
+import { LogOut, Calendar, Users, Clock, FolderOpen } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 
 interface LayoutProps {
   children: React.ReactNode;
-  currentPage?: 'dashboard' | 'users';
+  currentPage?: 'dashboard' | 'users' | 'projects';
 }
 
 export default function Layout({ children, currentPage = 'dashboard' }: LayoutProps) {
@@ -33,6 +33,12 @@ export default function Layout({ children, currentPage = 'dashboard' }: LayoutPr
       key: 'dashboard',
       icon: Calendar,
       href: '/',
+    },
+    {
+      name: 'Projetos',
+      key: 'projects',
+      icon: FolderOpen,
+      href: '/projects',
     },
     {
       name: 'Usuários',
