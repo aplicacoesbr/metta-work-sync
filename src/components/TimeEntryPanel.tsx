@@ -52,6 +52,8 @@ export default function TimeEntryPanel({ date, onClose, onSave }: TimeEntryPanel
   const [projects, setProjects] = useState<Project[]>([]);
   const [stages, setStages] = useState<Stage[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [showProjectsArea, setShowProjectsArea] = useState(false);
+  const [draftEntries, setDraftEntries] = useState<Partial<TimeEntry>[]>([]);
   const [newEntry, setNewEntry] = useState<Partial<TimeEntry>>({
     project: '',
     projectId: '',
@@ -139,9 +141,56 @@ export default function TimeEntryPanel({ date, onClose, onSave }: TimeEntryPanel
   };
 
   const calculateTotalWorked = () => {
-    return entries.reduce((total, entry) => {
+    const entriesTotal = entries.reduce((total, entry) => {
       return total + entry.hours + (entry.minutes / 60);
     }, 0);
+    
+    const draftsTotal = draftEntries.reduce((total, entry) => {
+      return total + (entry.hours || 0) + ((entry.minutes || 0) / 60);
+    }, 0);
+    
+    return entriesTotal + draftsTotal;
+  };
+
+  const addToDraft = () => {
+    if (!newEntry.project || newEntry.hours === undefined) return;
+
+    const draftEntry: Partial<TimeEntry> = {
+      id: Math.random().toString(36).substr(2, 9),
+      project: newEntry.project || '',
+      projectId: newEntry.projectId || '',
+      stage: newEntry.stage || '',
+      stageId: newEntry.stageId || '',
+      task: newEntry.task || '',
+      taskId: newEntry.taskId || '',
+      hours: newEntry.hours || 0,
+      minutes: newEntry.minutes || 0,
+    };
+
+    setDraftEntries([...draftEntries, draftEntry]);
+    setNewEntry({
+      project: '',
+      projectId: '',
+      stage: '',
+      stageId: '',
+      task: '',
+      taskId: '',
+      hours: 0,
+      minutes: 0,
+    });
+  };
+
+  const removeDraftEntry = (id: string) => {
+    setDraftEntries(draftEntries.filter(entry => entry.id !== id));
+  };
+
+  const addAllDraftEntries = () => {
+    const validDrafts = draftEntries.filter(draft => 
+      draft.project && (draft.hours || 0) > 0
+    ) as TimeEntry[];
+    
+    setEntries([...entries, ...validDrafts]);
+    setDraftEntries([]);
   };
 
   const addEntry = () => {
@@ -258,15 +307,29 @@ export default function TimeEntryPanel({ date, onClose, onSave }: TimeEntryPanel
                   <span>{difference > 0 ? '+' : ''}{difference.toFixed(1)}h</span>
                 </div>
               </div>
+
+              {/* Action Button */}
+              {!showProjectsArea && (
+                <Button 
+                  onClick={() => setShowProjectsArea(true)}
+                  className="w-full"
+                  variant="outline"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Adicionar Projetos ao Dia
+                </Button>
+              )}
             </CardContent>
           </Card>
 
           {/* Add New Entry */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Adicionar Registro</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
+          {showProjectsArea && (
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">Adicionar Projeto ao Dia</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
               <div>
                 <Label htmlFor="project">Projeto *</Label>
                 <Select
@@ -373,16 +436,63 @@ export default function TimeEntryPanel({ date, onClose, onSave }: TimeEntryPanel
                   />
                 </div>
               </div>
-              <Button 
-                onClick={addEntry} 
-                disabled={!newEntry.project}
-                className="w-full"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Adicionar
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  onClick={addToDraft} 
+                  disabled={!newEntry.project}
+                  className="flex-1"
+                  variant="outline"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Adicionar ao Rascunho
+                </Button>
+                <Button 
+                  onClick={addEntry} 
+                  disabled={!newEntry.project}
+                  className="flex-1"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Adicionar Direto
+                </Button>
+              </div>
             </CardContent>
           </Card>
+
+          {/* Draft Entries */}
+          {draftEntries.length > 0 && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm">Rascunho ({draftEntries.length} itens)</CardTitle>
+                  <Button size="sm" onClick={addAllDraftEntries}>
+                    Confirmar Todos
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {draftEntries.map((entry, index) => (
+                  <div key={entry.id} className="flex items-center justify-between p-2 bg-muted/30 rounded">
+                    <div className="text-sm">
+                      <div className="font-medium">{entry.project}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {entry.hours}h {(entry.minutes || 0) > 0 && `${entry.minutes}min`}
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeDraftEntry(entry.id!)}
+                      className="text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+          </>
+          )}
 
           {/* Entry List */}
           {entries.length > 0 && (

@@ -121,7 +121,7 @@ export default function Dashboard() {
             <div className="grid grid-cols-7 gap-1">
               {calendarDays.map((day, index) => {
                 if (!day) {
-                  return <div key={index} className="p-1 h-10"></div>;
+                  return <div key={index} className="p-1 h-8"></div>;
                 }
 
                 const status = getDateStatus(day);
@@ -132,9 +132,9 @@ export default function Dashboard() {
                     key={day}
                     onClick={() => handleDateClick(day)}
                     className={cn(
-                      "p-1 h-10 rounded-md text-xs font-medium transition-all hover:scale-105 hover:shadow-md",
-                      "border border-transparent",
-                      isTodayDate && "ring-2 ring-primary ring-offset-2",
+                      "p-1 h-8 rounded-md text-xs font-medium transition-all hover:scale-105 hover:shadow-md",
+                      "border border-transparent flex items-center justify-center relative",
+                      isTodayDate && "ring-2 ring-primary ring-offset-1",
                       status === 'complete' && "bg-success text-success-foreground",
                       status === 'partial' && "bg-warning text-warning-foreground",
                       status === 'empty' && "bg-muted text-muted-foreground hover:bg-muted/80",
@@ -143,6 +143,13 @@ export default function Dashboard() {
                     )}
                   >
                     {day}
+                    {status !== 'empty' && (
+                      <div className={cn(
+                        "absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full",
+                        status === 'complete' && "bg-success-foreground",
+                        status === 'partial' && "bg-warning-foreground"
+                      )} />
+                    )}
                   </button>
                 );
               })}
