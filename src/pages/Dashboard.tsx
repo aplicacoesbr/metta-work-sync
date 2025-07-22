@@ -75,7 +75,7 @@ export default function Dashboard() {
     <Layout currentPage="dashboard">
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Dashboard TESTE</h1>
+          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
           <p className="text-muted-foreground">Controle de ponto e projetos</p>
         </div>
 
