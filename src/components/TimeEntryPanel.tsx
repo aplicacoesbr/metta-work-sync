@@ -13,6 +13,7 @@ interface TimeEntryPanelProps {
   date: Date;
   onClose: () => void;
   onSave: (data: any) => void;
+  existingData?: any;
 }
 
 interface TimeEntry {
@@ -45,7 +46,7 @@ interface Task {
   stage_id: string;
 }
 
-export default function TimeEntryPanel({ date, onClose, onSave }: TimeEntryPanelProps) {
+export default function TimeEntryPanel({ date, onClose, onSave, existingData }: TimeEntryPanelProps) {
   const [totalHours, setTotalHours] = useState(8);
   const [totalMinutes, setTotalMinutes] = useState(0);
   const [entries, setEntries] = useState<TimeEntry[]>([]);
@@ -67,7 +68,68 @@ export default function TimeEntryPanel({ date, onClose, onSave }: TimeEntryPanel
 
   useEffect(() => {
     loadProjects();
+    loadExistingData();
   }, []);
+
+  // Load existing data when component mounts
+  const loadExistingData = async () => {
+    try {
+      const dateStr = date.toISOString().split('T')[0];
+      
+      // Load time point for the day
+      const { data: timePoint, error: timePointError } = await supabase
+        .from('time_points')
+        .select('total_minutes')
+        .eq('date', dateStr)
+        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+        .single();
+        
+      if (timePointError && timePointError.code !== 'PGRST116') {
+        throw timePointError;
+      }
+      
+      if (timePoint) {
+        const hours = Math.floor(timePoint.total_minutes / 60);
+        const minutes = timePoint.total_minutes % 60;
+        setTotalHours(hours);
+        setTotalMinutes(minutes);
+      }
+      
+      // Load time records for the day
+      const { data: records, error: recordsError } = await supabase
+        .from('time_records')
+        .select(`
+          id, minutes, description,
+          project_id, stage_id, task_id,
+          projects(name),
+          stages(name),
+          tasks(name)
+        `)
+        .eq('date', dateStr)
+        .eq('user_id', (await supabase.auth.getUser()).data.user?.id);
+        
+      if (recordsError) throw recordsError;
+      
+      if (records && records.length > 0) {
+        const existingEntries = records.map(record => ({
+          id: record.id,
+          project: record.projects?.name || '',
+          projectId: record.project_id || '',
+          stage: record.stages?.name || '',
+          stageId: record.stage_id || '',
+          task: record.tasks?.name || '',
+          taskId: record.task_id || '',
+          hours: Math.floor(record.minutes / 60),
+          minutes: record.minutes % 60
+        }));
+        
+        setEntries(existingEntries);
+        setShowProjectsArea(true);
+      }
+    } catch (error) {
+      console.error('Error loading existing data:', error);
+    }
+  };
 
   useEffect(() => {
     if (newEntry.projectId) {
@@ -229,12 +291,138 @@ export default function TimeEntryPanel({ date, onClose, onSave }: TimeEntryPanel
   const totalExpected = totalHours + (totalMinutes / 60);
   const difference = totalWorked - totalExpected;
 
-  const handleSave = () => {
-    onSave({
-      date,
-      totalHours: totalWorked,
-      entries,
-    });
+  const duplicatePreviousRecord = async () => {
+    try {
+      const currentUser = (await supabase.auth.getUser()).data.user;
+      if (!currentUser) return;
+      
+      // Find the most recent day with records
+      const { data: previousRecords, error } = await supabase
+        .from('time_records')
+        .select(`
+          minutes, project_id, stage_id, task_id,
+          projects(name),
+          stages(name),
+          tasks(name)
+        `)
+        .eq('user_id', currentUser.id)
+        .lt('date', date.toISOString().split('T')[0])
+        .order('date', { ascending: false })
+        .limit(10);
+        
+      if (error) throw error;
+      
+      if (previousRecords && previousRecords.length > 0) {
+        // Group by date to find the latest complete day
+        const recordsByDate: Record<string, any[]> = {};
+        
+        const { data: allPrevious, error: allError } = await supabase
+          .from('time_records')
+          .select(`
+            date, minutes, project_id, stage_id, task_id,
+            projects(name),
+            stages(name), 
+            tasks(name)
+          `)
+          .eq('user_id', currentUser.id)
+          .lt('date', date.toISOString().split('T')[0])
+          .order('date', { ascending: false });
+          
+        if (allError) throw allError;
+        
+        if (allPrevious && allPrevious.length > 0) {
+          allPrevious.forEach(record => {
+            if (!recordsByDate[record.date]) {
+              recordsByDate[record.date] = [];
+            }
+            recordsByDate[record.date].push(record);
+          });
+          
+          // Get the latest date with records
+          const latestDate = Object.keys(recordsByDate)[0];
+          const latestRecords = recordsByDate[latestDate];
+          
+          // Convert to draft entries
+          const duplicatedEntries = latestRecords.map(record => ({
+            id: Math.random().toString(36).substr(2, 9),
+            project: record.projects?.name || '',
+            projectId: record.project_id || '',
+            stage: record.stages?.name || '',
+            stageId: record.stage_id || '',
+            task: record.tasks?.name || '',
+            taskId: record.task_id || '',
+            hours: Math.floor(record.minutes / 60),
+            minutes: record.minutes % 60
+          }));
+          
+          setDraftEntries(duplicatedEntries);
+          setShowProjectsArea(true);
+        }
+      }
+    } catch (error) {
+      console.error('Error duplicating previous record:', error);
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      const currentUser = (await supabase.auth.getUser()).data.user;
+      if (!currentUser) return;
+      
+      const dateStr = date.toISOString().split('T')[0];
+      
+      // Save time point
+      const totalMinutesWorked = Math.round(totalWorked * 60);
+      
+      const { error: timePointError } = await supabase
+        .from('time_points')
+        .upsert({
+          user_id: currentUser.id,
+          date: dateStr,
+          total_minutes: totalHours * 60 + totalMinutes
+        }, {
+          onConflict: 'user_id,date'
+        });
+        
+      if (timePointError) throw timePointError;
+      
+      // Delete existing records for this date
+      const { error: deleteError } = await supabase
+        .from('time_records')
+        .delete()
+        .eq('user_id', currentUser.id)
+        .eq('date', dateStr);
+        
+      if (deleteError) throw deleteError;
+      
+      // Insert new records
+      if (entries.length > 0) {
+        const recordsToInsert = entries.map(entry => ({
+          user_id: currentUser.id,
+          date: dateStr,
+          minutes: entry.hours * 60 + entry.minutes,
+          project_id: entry.projectId || null,
+          stage_id: entry.stageId || null,
+          task_id: entry.taskId || null,
+          description: null
+        }));
+        
+        const { error: insertError } = await supabase
+          .from('time_records')
+          .insert(recordsToInsert);
+          
+        if (insertError) throw insertError;
+      }
+      
+      onSave({
+        date,
+        totalHours: totalWorked,
+        entries,
+      });
+      
+    } catch (error) {
+      console.error('Error saving time entries:', error);
+    }
   };
 
   return (
@@ -308,16 +496,25 @@ export default function TimeEntryPanel({ date, onClose, onSave }: TimeEntryPanel
                 </div>
               </div>
 
-              {/* Action Button */}
+              {/* Action Buttons */}
               {!showProjectsArea && (
-                <Button 
-                  onClick={() => setShowProjectsArea(true)}
-                  className="w-full"
-                  variant="outline"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Adicionar Projetos ao Dia
-                </Button>
+                <div className="space-y-2">
+                  <Button 
+                    onClick={() => setShowProjectsArea(true)}
+                    className="w-full"
+                    variant="outline"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Adicionar Projetos ao Dia
+                  </Button>
+                  <Button 
+                    onClick={duplicatePreviousRecord}
+                    className="w-full"
+                    variant="secondary"
+                  >
+                    Duplicar Registro Anterior
+                  </Button>
+                </div>
               )}
             </CardContent>
           </Card>

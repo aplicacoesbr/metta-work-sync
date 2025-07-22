@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import TimeEntryPanel from '@/components/TimeEntryPanel';
+import { supabase } from '@/integrations/supabase/client';
 
 const MONTHS = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -17,6 +18,7 @@ export default function Dashboard() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [timeEntries, setTimeEntries] = useState<Record<string, any>>({});
+  const [isLoading, setIsLoading] = useState(false);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -27,7 +29,7 @@ export default function Dashboard() {
   const daysInMonth = lastDay.getDate();
   const startingDayOfWeek = firstDay.getDay();
 
-  // Create calendar grid
+  // Create calendar grid - using memoization to prevent recreation on each render
   const calendarDays = [];
   
   // Empty cells for days before month starts
@@ -39,6 +41,64 @@ export default function Dashboard() {
   for (let day = 1; day <= daysInMonth; day++) {
     calendarDays.push(day);
   }
+  
+  // Load time entries from Supabase for the current month
+  useEffect(() => {
+    const fetchTimeEntries = async () => {
+      setIsLoading(true);
+      try {
+        // Set start and end dates for the current month
+        const startDate = new Date(year, month, 1);
+        const endDate = new Date(year, month + 1, 0);
+        
+        const { data: records, error } = await supabase
+          .from('time_records')
+          .select('date, minutes, project_id, stage_id, task_id')
+          .gte('date', startDate.toISOString().split('T')[0])
+          .lte('date', endDate.toISOString().split('T')[0]);
+          
+        if (error) throw error;
+        
+        // Group records by date
+        const entriesByDate: Record<string, any> = {};
+        
+        if (records && records.length > 0) {
+          records.forEach(record => {
+            const dateKey = record.date;
+            
+            if (!entriesByDate[dateKey]) {
+              entriesByDate[dateKey] = {
+                totalHours: 0,
+                entries: []
+              };
+            }
+            
+            // Convert minutes to hours
+            const hours = Math.floor(record.minutes / 60);
+            const minutes = record.minutes % 60;
+            
+            entriesByDate[dateKey].totalHours += record.minutes / 60;
+            
+            entriesByDate[dateKey].entries.push({
+              projectId: record.project_id,
+              stageId: record.stage_id,
+              taskId: record.task_id,
+              hours,
+              minutes
+            });
+          });
+        }
+        
+        setTimeEntries(entriesByDate);
+      } catch (error) {
+        console.error('Error loading time entries:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchTimeEntries();
+  }, [year, month]);
 
   const navigateMonth = (direction: 'prev' | 'next') => {
     setCurrentDate(new Date(year, month + (direction === 'next' ? 1 : -1), 1));
@@ -118,10 +178,10 @@ export default function Dashboard() {
               ))}
             </div>
             
-            <div className="grid grid-cols-7 gap-1">
+            <div className="grid grid-cols-7 gap-0.5">
               {calendarDays.map((day, index) => {
                 if (!day) {
-                  return <div key={index} className="p-1 h-8"></div>;
+                  return <div key={index} className="p-0.5 h-6"></div>;
                 }
 
                 const status = getDateStatus(day);
@@ -132,20 +192,20 @@ export default function Dashboard() {
                     key={day}
                     onClick={() => handleDateClick(day)}
                     className={cn(
-                      "p-1 h-8 rounded-md text-xs font-medium transition-all hover:scale-105 hover:shadow-md",
+                      "p-0.5 h-6 rounded text-xs font-medium transition-all hover:scale-105 hover:shadow-sm",
                       "border border-transparent flex items-center justify-center relative",
-                      isTodayDate && "ring-2 ring-primary ring-offset-1",
+                      isTodayDate && "ring-1 ring-primary ring-offset-1",
                       status === 'complete' && "bg-success text-success-foreground",
-                      status === 'partial' && "bg-warning text-warning-foreground",
+                      status === 'partial' && "bg-warning text-warning-foreground", 
                       status === 'empty' && "bg-muted text-muted-foreground hover:bg-muted/80",
                       selectedDate && selectedDate.getDate() === day && selectedDate.getMonth() === month && selectedDate.getFullYear() === year &&
-                      "ring-2 ring-accent ring-offset-1"
+                      "ring-1 ring-accent ring-offset-1"
                     )}
                   >
                     {day}
                     {status !== 'empty' && (
                       <div className={cn(
-                        "absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full",
+                        "absolute top-0 right-0 w-1 h-1 rounded-full",
                         status === 'complete' && "bg-success-foreground",
                         status === 'partial' && "bg-warning-foreground"
                       )} />
@@ -231,7 +291,10 @@ export default function Dashboard() {
               [dateKey]: data
             }));
             setSelectedDate(null);
+            // Refresh data after saving
+            window.location.reload();
           }}
+          existingData={timeEntries[getDateKey(selectedDate)]}
         />
       )}
     </Layout>
