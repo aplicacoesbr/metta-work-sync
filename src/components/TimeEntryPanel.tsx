@@ -491,9 +491,34 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
     }
   };
 
-  const handleTimePointChange = () => {
+  const handleTimePointChange = async () => {
     setHasTimePoint(true);
-    setShowProjectsArea(true);
+  };
+
+  const handleSaveTimePoint = async () => {
+    try {
+      const currentUser = (await supabase.auth.getUser()).data.user;
+      if (!currentUser) return;
+      
+      const dateStr = date.toISOString().split('T')[0];
+      
+      // Save time point
+      const { error: timePointError } = await supabase
+        .from('time_points')
+        .upsert({
+          user_id: currentUser.id,
+          date: dateStr,
+          total_minutes: totalHours * 60 + totalMinutes
+        }, {
+          onConflict: 'user_id,date'
+        });
+        
+      if (timePointError) throw timePointError;
+      
+      setShowProjectsArea(true);
+    } catch (error) {
+      console.error('Error saving time point:', error);
+    }
   };
 
   return (
@@ -572,10 +597,18 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
                   <span>{difference > 0 ? '+' : ''}{difference.toFixed(1)}h</span>
                 </div>
               </div>
+              
+              <Button 
+                onClick={handleSaveTimePoint}
+                className="w-full"
+                disabled={totalHours === 0 && totalMinutes === 0}
+              >
+                Salvar Ponto e Continuar
+              </Button>
             </CardContent>
           </Card>
 
-          {/* Step 2: Project Area - Only shown after time point is set */}
+          {/* Step 2: Project Area - Only shown after time point is saved */}
           {!showProjectsArea && hasTimePoint && (
             <Card>
               <CardHeader>

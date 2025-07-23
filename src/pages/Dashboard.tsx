@@ -23,23 +23,23 @@ export default function Dashboard() {
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
 
-  // Get first day of month and number of days
+  // Get calendar data with stable calculation
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
   const daysInMonth = lastDay.getDate();
   const startingDayOfWeek = firstDay.getDay();
 
-  // Create calendar grid - using memoization to prevent recreation on each render
+  // Create calendar grid with stable keys
   const calendarDays = [];
   
   // Empty cells for days before month starts
   for (let i = 0; i < startingDayOfWeek; i++) {
-    calendarDays.push(null);
+    calendarDays.push({ day: null, key: `empty-${i}` });
   }
   
   // Days of the month
   for (let day = 1; day <= daysInMonth; day++) {
-    calendarDays.push(day);
+    calendarDays.push({ day, key: `day-${year}-${month}-${day}` });
   }
   
   // Load time entries from Supabase for the current month
@@ -165,47 +165,48 @@ export default function Dashboard() {
               </div>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4">
             {/* Calendar Grid */}
             <div className="grid grid-cols-7 gap-1 mb-4">
               {DAYS.map((day) => (
                 <div
                   key={day}
-                  className="p-1 text-center text-xs font-medium text-muted-foreground"
+                  className="p-2 text-center text-sm font-medium text-muted-foreground"
                 >
                   {day}
                 </div>
               ))}
             </div>
             
-            <div className="grid grid-cols-7 gap-0.5">
-              {calendarDays.map((day, index) => {
-                if (!day) {
-                  return <div key={index} className="p-0.5 h-6"></div>;
+            <div className="grid grid-cols-7 gap-1">
+              {calendarDays.map((dayObj) => {
+                if (!dayObj.day) {
+                  return <div key={dayObj.key} className="p-2 h-10"></div>;
                 }
 
+                const day = dayObj.day;
                 const status = getDateStatus(day);
                 const isTodayDate = isToday(day);
 
                 return (
                   <button
-                    key={day}
+                    key={dayObj.key}
                     onClick={() => handleDateClick(day)}
                     className={cn(
-                      "p-0.5 h-6 rounded text-xs font-medium transition-all hover:scale-105 hover:shadow-sm",
+                      "p-2 h-10 rounded text-sm font-medium transition-all hover:scale-105 hover:shadow-sm",
                       "border border-transparent flex items-center justify-center relative",
-                      isTodayDate && "ring-1 ring-primary ring-offset-1",
+                      isTodayDate && "ring-2 ring-primary ring-offset-1",
                       status === 'complete' && "bg-success text-success-foreground",
                       status === 'partial' && "bg-warning text-warning-foreground", 
                       status === 'empty' && "bg-muted text-muted-foreground hover:bg-muted/80",
                       selectedDate && selectedDate.getDate() === day && selectedDate.getMonth() === month && selectedDate.getFullYear() === year &&
-                      "ring-1 ring-accent ring-offset-1"
+                      "ring-2 ring-accent ring-offset-1"
                     )}
                   >
                     {day}
                     {status !== 'empty' && (
                       <div className={cn(
-                        "absolute top-0 right-0 w-1 h-1 rounded-full",
+                        "absolute top-1 right-1 w-1.5 h-1.5 rounded-full",
                         status === 'complete' && "bg-success-foreground",
                         status === 'partial' && "bg-warning-foreground"
                       )} />
