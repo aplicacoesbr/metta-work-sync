@@ -279,7 +279,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Time Entry Panel */}
+      {/* Time Entry Modal */}
       {selectedDate && (
         <TimeEntryPanel
           date={selectedDate}

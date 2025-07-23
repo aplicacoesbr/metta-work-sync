@@ -26,6 +26,7 @@ interface TimeEntry {
   taskId: string;
   hours: number;
   minutes: number;
+  percentage: number;
 }
 
 interface Project {
@@ -55,6 +56,7 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [showProjectsArea, setShowProjectsArea] = useState(false);
   const [draftEntries, setDraftEntries] = useState<Partial<TimeEntry>[]>([]);
+  const [hasTimePoint, setHasTimePoint] = useState(false);
   const [newEntry, setNewEntry] = useState<Partial<TimeEntry>>({
     project: '',
     projectId: '',
@@ -64,6 +66,7 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
     taskId: '',
     hours: 0,
     minutes: 0,
+    percentage: 0,
   });
 
   useEffect(() => {
@@ -93,6 +96,8 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
         const minutes = timePoint.total_minutes % 60;
         setTotalHours(hours);
         setTotalMinutes(minutes);
+        setHasTimePoint(true);
+        setShowProjectsArea(true);
       }
       
       // Load time records for the day
@@ -111,17 +116,25 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
       if (recordsError) throw recordsError;
       
       if (records && records.length > 0) {
-        const existingEntries = records.map(record => ({
-          id: record.id,
-          project: record.projects?.name || '',
-          projectId: record.project_id || '',
-          stage: record.stages?.name || '',
-          stageId: record.stage_id || '',
-          task: record.tasks?.name || '',
-          taskId: record.task_id || '',
-          hours: Math.floor(record.minutes / 60),
-          minutes: record.minutes % 60
-        }));
+        const existingEntries = records.map(record => {
+          const hours = Math.floor(record.minutes / 60);
+          const minutes = record.minutes % 60;
+          const totalDaily = totalHours * 60 + totalMinutes;
+          const percentage = totalDaily > 0 ? (record.minutes / totalDaily) * 100 : 0;
+          
+          return {
+            id: record.id,
+            project: record.projects?.name || '',
+            projectId: record.project_id || '',
+            stage: record.stages?.name || '',
+            stageId: record.stage_id || '',
+            task: record.tasks?.name || '',
+            taskId: record.task_id || '',
+            hours,
+            minutes,
+            percentage: Math.round(percentage * 100) / 100
+          };
+        });
         
         setEntries(existingEntries);
         setShowProjectsArea(true);
@@ -214,8 +227,40 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
     return entriesTotal + draftsTotal;
   };
 
+  const convertHoursToPercentage = (hours: number, minutes: number = 0) => {
+    const totalDailyMinutes = totalHours * 60 + totalMinutes;
+    if (totalDailyMinutes === 0) return 0;
+    const entryMinutes = hours * 60 + minutes;
+    return Math.round((entryMinutes / totalDailyMinutes) * 100 * 100) / 100;
+  };
+
+  const convertPercentageToHours = (percentage: number) => {
+    const totalDailyMinutes = totalHours * 60 + totalMinutes;
+    const entryMinutes = Math.round((percentage / 100) * totalDailyMinutes);
+    return {
+      hours: Math.floor(entryMinutes / 60),
+      minutes: entryMinutes % 60
+    };
+  };
+
+  const validateTotalPercentage = () => {
+    const currentTotal = calculateTotalWorked();
+    const totalDaily = totalHours + (totalMinutes / 60);
+    return currentTotal <= totalDaily;
+  };
+
   const addToDraft = () => {
-    if (!newEntry.project || newEntry.hours === undefined) return;
+    if (!newEntry.project || (newEntry.hours === undefined && newEntry.percentage === undefined)) return;
+    
+    // Validate total doesn't exceed 100%
+    const entryHours = (newEntry.hours || 0) + ((newEntry.minutes || 0) / 60);
+    const totalWorked = calculateTotalWorked();
+    const totalDaily = totalHours + (totalMinutes / 60);
+    
+    if (totalWorked + entryHours > totalDaily) {
+      alert('O total de horas não pode ultrapassar o ponto do dia!');
+      return;
+    }
 
     const draftEntry: Partial<TimeEntry> = {
       id: Math.random().toString(36).substr(2, 9),
@@ -227,6 +272,7 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
       taskId: newEntry.taskId || '',
       hours: newEntry.hours || 0,
       minutes: newEntry.minutes || 0,
+      percentage: newEntry.percentage || convertHoursToPercentage(newEntry.hours || 0, newEntry.minutes || 0),
     };
 
     setDraftEntries([...draftEntries, draftEntry]);
@@ -239,6 +285,7 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
       taskId: '',
       hours: 0,
       minutes: 0,
+      percentage: 0,
     });
   };
 
@@ -257,6 +304,16 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
 
   const addEntry = () => {
     if (!newEntry.project || newEntry.hours === undefined) return;
+    
+    // Validate total doesn't exceed 100%
+    const entryHours = (newEntry.hours || 0) + ((newEntry.minutes || 0) / 60);
+    const totalWorked = calculateTotalWorked();
+    const totalDaily = totalHours + (totalMinutes / 60);
+    
+    if (totalWorked + entryHours > totalDaily) {
+      alert('O total de horas não pode ultrapassar o ponto do dia!');
+      return;
+    }
 
     const entry: TimeEntry = {
       id: Math.random().toString(36).substr(2, 9),
@@ -268,6 +325,7 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
       taskId: newEntry.taskId || '',
       hours: newEntry.hours || 0,
       minutes: newEntry.minutes || 0,
+      percentage: newEntry.percentage || convertHoursToPercentage(newEntry.hours || 0, newEntry.minutes || 0),
     };
 
     setEntries([...entries, entry]);
@@ -280,6 +338,7 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
       taskId: '',
       hours: 0,
       minutes: 0,
+      percentage: 0,
     });
   };
 
@@ -343,17 +402,24 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
           const latestRecords = recordsByDate[latestDate];
           
           // Convert to draft entries
-          const duplicatedEntries = latestRecords.map(record => ({
-            id: Math.random().toString(36).substr(2, 9),
-            project: record.projects?.name || '',
-            projectId: record.project_id || '',
-            stage: record.stages?.name || '',
-            stageId: record.stage_id || '',
-            task: record.tasks?.name || '',
-            taskId: record.task_id || '',
-            hours: Math.floor(record.minutes / 60),
-            minutes: record.minutes % 60
-          }));
+          const duplicatedEntries = latestRecords.map(record => {
+            const hours = Math.floor(record.minutes / 60);
+            const minutes = record.minutes % 60;
+            const percentage = convertHoursToPercentage(hours, minutes);
+            
+            return {
+              id: Math.random().toString(36).substr(2, 9),
+              project: record.projects?.name || '',
+              projectId: record.project_id || '',
+              stage: record.stages?.name || '',
+              stageId: record.stage_id || '',
+              task: record.tasks?.name || '',
+              taskId: record.task_id || '',
+              hours,
+              minutes,
+              percentage
+            };
+          });
           
           setDraftEntries(duplicatedEntries);
           setShowProjectsArea(true);
@@ -425,9 +491,14 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
     }
   };
 
+  const handleTimePointChange = () => {
+    setHasTimePoint(true);
+    setShowProjectsArea(true);
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-end z-50">
-      <div className="bg-card w-full max-w-lg h-full overflow-y-auto shadow-xl border-l border-border">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-card w-full max-w-md max-h-[80vh] overflow-y-auto shadow-xl border border-border rounded-lg">
         <div className="p-6 space-y-6">
           {/* Header */}
           <div className="flex items-center justify-between">
@@ -444,7 +515,7 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
             </Button>
           </div>
 
-          {/* Daily Hours Target */}
+          {/* Step 1: Daily Hours Target */}
           <Card>
             <CardHeader>
               <CardTitle className="text-sm">Meta do Dia</CardTitle>
@@ -459,7 +530,10 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
                     min="0"
                     max="12"
                     value={totalHours}
-                    onChange={(e) => setTotalHours(Number(e.target.value))}
+                    onChange={(e) => {
+                      setTotalHours(Number(e.target.value));
+                      handleTimePointChange();
+                    }}
                   />
                 </div>
                 <div>
@@ -470,7 +544,10 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
                     min="0"
                     max="59"
                     value={totalMinutes}
-                    onChange={(e) => setTotalMinutes(Number(e.target.value))}
+                    onChange={(e) => {
+                      setTotalMinutes(Number(e.target.value));
+                      handleTimePointChange();
+                    }}
                   />
                 </div>
               </div>
@@ -495,9 +572,16 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
                   <span>{difference > 0 ? '+' : ''}{difference.toFixed(1)}h</span>
                 </div>
               </div>
+            </CardContent>
+          </Card>
 
-              {/* Action Buttons */}
-              {!showProjectsArea && (
+          {/* Step 2: Project Area - Only shown after time point is set */}
+          {!showProjectsArea && hasTimePoint && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Projetos do Dia</CardTitle>
+              </CardHeader>
+              <CardContent>
                 <div className="space-y-2">
                   <Button 
                     onClick={() => setShowProjectsArea(true)}
@@ -515,13 +599,24 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
                     Duplicar Registro Anterior
                   </Button>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Add New Entry */}
           {showProjectsArea && (
             <>
+              {/* Duplicate Button */}
+              <div className="flex justify-center">
+                <Button 
+                  onClick={duplicatePreviousRecord}
+                  variant="secondary"
+                  size="sm"
+                >
+                  Duplicar Registro Anterior
+                </Button>
+              </div>
+
               <Card>
                 <CardHeader>
                   <CardTitle className="text-sm">Adicionar Projeto ao Dia</CardTitle>
@@ -610,7 +705,7 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <Label htmlFor="entry-hours">Horas</Label>
                   <Input
@@ -618,7 +713,17 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
                     type="number"
                     min="0"
                     value={newEntry.hours || ''}
-                    onChange={(e) => setNewEntry({ ...newEntry, hours: Number(e.target.value) })}
+                    onChange={(e) => {
+                      const hours = Number(e.target.value);
+                      const percentage = convertHoursToPercentage(hours, newEntry.minutes || 0);
+                      setNewEntry({ ...newEntry, hours, percentage });
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const percentage = convertHoursToPercentage(newEntry.hours || 0, newEntry.minutes || 0);
+                        setNewEntry({ ...newEntry, percentage });
+                      }
+                    }}
                   />
                 </div>
                 <div>
@@ -629,10 +734,43 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
                     min="0"
                     max="59"
                     value={newEntry.minutes || ''}
-                    onChange={(e) => setNewEntry({ ...newEntry, minutes: Number(e.target.value) })}
+                    onChange={(e) => {
+                      const minutes = Number(e.target.value);
+                      const percentage = convertHoursToPercentage(newEntry.hours || 0, minutes);
+                      setNewEntry({ ...newEntry, minutes, percentage });
+                    }}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="entry-percentage">%</Label>
+                  <Input
+                    id="entry-percentage"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={newEntry.percentage || ''}
+                    onChange={(e) => {
+                      const percentage = Number(e.target.value);
+                      const { hours, minutes } = convertPercentageToHours(percentage);
+                      setNewEntry({ ...newEntry, percentage, hours, minutes });
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const { hours, minutes } = convertPercentageToHours(newEntry.percentage || 0);
+                        setNewEntry({ ...newEntry, hours, minutes });
+                      }
+                    }}
                   />
                 </div>
               </div>
+              
+              {/* Validation Message */}
+              {!validateTotalPercentage() && (
+                <div className="text-sm text-destructive bg-destructive/10 p-2 rounded">
+                  ⚠️ O total de horas ultrapassará 100% do ponto do dia!
+                </div>
+              )}
               <div className="flex gap-2">
                 <Button 
                   onClick={addToDraft} 
@@ -714,7 +852,7 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
                           </div>
                         )}
                         <div className="text-sm font-medium text-primary">
-                          {entry.hours}h {entry.minutes > 0 && `${entry.minutes}min`}
+                          {entry.hours}h {entry.minutes > 0 && `${entry.minutes}min`} ({entry.percentage?.toFixed(1)}%)
                         </div>
                       </div>
                       <Button
