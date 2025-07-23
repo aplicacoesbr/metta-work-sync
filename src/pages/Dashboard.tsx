@@ -233,51 +233,6 @@ export default function Dashboard() {
             </div>
           </CardContent>
         </Card>
-
-        {/* Quick Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="shadow-md">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Horas do Mês
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-foreground">0h</div>
-              <p className="text-xs text-muted-foreground">
-                de 160h esperadas
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-md">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Dias Trabalhados
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-foreground">0</div>
-              <p className="text-xs text-muted-foreground">
-                de {daysInMonth} dias
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-md">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Projetos Ativos
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-foreground">0</div>
-              <p className="text-xs text-muted-foreground">
-                projetos em andamento
-              </p>
-            </CardContent>
-          </Card>
-        </div>
       </div>
 
       {/* Time Entry Modal */}
