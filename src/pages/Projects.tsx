@@ -227,6 +227,65 @@ export default function Projects() {
     }
   };
 
+  const deleteStage = async (stageId: string, projectId: string) => {
+    try {
+      const { error } = await supabase
+        .from('stages')
+        .delete()
+        .eq('id', stageId);
+
+      if (error) throw error;
+
+      setStages(prev => ({
+        ...prev,
+        [projectId]: prev[projectId]?.filter(s => s.id !== stageId) || []
+      }));
+      
+      // Also remove all tasks from this stage
+      delete tasks[stageId];
+      
+      toast({
+        title: 'Sucesso',
+        description: 'Etapa excluída com sucesso!',
+      });
+    } catch (error) {
+      console.error('Error deleting stage:', error);
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível excluir a etapa.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const deleteTask = async (taskId: string, stageId: string) => {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', taskId);
+
+      if (error) throw error;
+
+      setTasks(prev => ({
+        ...prev,
+        [stageId]: prev[stageId]?.filter(t => t.id !== taskId) || []
+      }));
+      
+      toast({
+        title: 'Sucesso',
+        description: 'Tarefa excluída com sucesso!',
+      });
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      toast({
+        title: 'Erro',
+        description: 'Não foi possível excluir a tarefa.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const createStage = async (projectId: string) => {
     const stageData = newStage[projectId];
     if (!stageData?.name.trim()) return;
@@ -552,9 +611,38 @@ export default function Projects() {
                                     )}
                                   </div>
                                 </div>
-                                <Badge variant="outline" className="text-xs">
-                                  {tasks[stage.id]?.length || 0} tarefas
-                                </Badge>
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline" className="text-xs">
+                                    {tasks[stage.id]?.length || 0} tarefas
+                                  </Badge>
+                                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                                      <Edit2 className="h-3 w-3" />
+                                    </Button>
+                                    <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive">
+                                          <Trash2 className="h-3 w-3" />
+                                        </Button>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                          <AlertDialogTitle>Excluir Etapa</AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                            Tem certeza que deseja excluir a etapa "{stage.name}"? 
+                                            Todas as tarefas desta etapa também serão excluídas.
+                                          </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                          <AlertDialogAction onClick={() => deleteStage(stage.id, project.id)}>
+                                            Excluir
+                                          </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    </AlertDialog>
+                                  </div>
+                                </div>
                               </div>
                             </CollapsibleTrigger>
 
@@ -604,12 +692,31 @@ export default function Projects() {
                                         )}
                                       </div>
                                       <div className="flex items-center gap-1">
-                                        <Button variant="ghost" size="sm">
+                                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
                                           <Edit2 className="h-3 w-3" />
                                         </Button>
-                                        <Button variant="ghost" size="sm" className="text-destructive">
-                                          <Trash2 className="h-3 w-3" />
-                                        </Button>
+                                        <AlertDialog>
+                                          <AlertDialogTrigger asChild>
+                                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive">
+                                              <Trash2 className="h-3 w-3" />
+                                            </Button>
+                                          </AlertDialogTrigger>
+                                          <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                              <AlertDialogTitle>Excluir Tarefa</AlertDialogTitle>
+                                              <AlertDialogDescription>
+                                                Tem certeza que deseja excluir a tarefa "{task.name}"? 
+                                                Esta ação não pode ser desfeita.
+                                              </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                              <AlertDialogAction onClick={() => deleteTask(task.id, stage.id)}>
+                                                Excluir
+                                              </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                          </AlertDialogContent>
+                                        </AlertDialog>
                                       </div>
                                     </div>
                                   </div>

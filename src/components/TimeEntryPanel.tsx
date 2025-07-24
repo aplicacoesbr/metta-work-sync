@@ -250,9 +250,17 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
   };
 
   const addToDraft = () => {
-    if (!newEntry.project || (newEntry.hours === undefined && newEntry.percentage === undefined)) return;
+    if (!newEntry.project || !newEntry.projectId) {
+      alert('Selecione um projeto antes de adicionar.');
+      return;
+    }
     
-    // Validate total doesn't exceed 100%
+    if ((newEntry.hours || 0) === 0 && (newEntry.minutes || 0) === 0) {
+      alert('Defina uma quantidade de horas ou minutos para o registro.');
+      return;
+    }
+    
+    // Validate total doesn't exceed daily target
     const entryHours = (newEntry.hours || 0) + ((newEntry.minutes || 0) / 60);
     const totalWorked = calculateTotalWorked();
     const totalDaily = totalHours + (totalMinutes / 60);
@@ -276,9 +284,11 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
     };
 
     setDraftEntries([...draftEntries, draftEntry]);
+    
+    // Reset form but keep project selection for easier multiple entries
     setNewEntry({
-      project: '',
-      projectId: '',
+      project: newEntry.project,
+      projectId: newEntry.projectId,
       stage: '',
       stageId: '',
       task: '',
@@ -515,9 +525,14 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
         
       if (timePointError) throw timePointError;
       
+      setHasTimePoint(true);
       setShowProjectsArea(true);
+      
+      // Show success message
+      console.log('Ponto do dia salvo com sucesso!');
     } catch (error) {
       console.error('Error saving time point:', error);
+      alert('Erro ao salvar o ponto do dia. Tente novamente.');
     }
   };
 
@@ -598,39 +613,33 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
                 </div>
               </div>
               
-              <Button 
-                onClick={handleSaveTimePoint}
-                className="w-full"
-                disabled={totalHours === 0 && totalMinutes === 0}
-              >
-                Salvar Ponto e Continuar
-              </Button>
+              {!hasTimePoint ? (
+                <Button 
+                  onClick={handleSaveTimePoint}
+                  className="w-full"
+                  disabled={totalHours === 0 && totalMinutes === 0}
+                >
+                  Salvar Ponto e Continuar
+                </Button>
+              ) : (
+                <Button 
+                  onClick={handleSaveTimePoint}
+                  className="w-full"
+                  variant="outline"
+                  disabled={totalHours === 0 && totalMinutes === 0}
+                >
+                  Atualizar Ponto
+                </Button>
+              )}
             </CardContent>
           </Card>
 
-          {/* Step 2: Project Area - Only shown after time point is saved */}
-          {!showProjectsArea && hasTimePoint && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">Projetos do Dia</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <Button 
-                    onClick={() => setShowProjectsArea(true)}
-                    className="w-full"
-                    variant="outline"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Adicionar Projetos ao Dia
-                  </Button>
-                  <Button 
-                    onClick={duplicatePreviousRecord}
-                    className="w-full"
-                    variant="secondary"
-                  >
-                    Duplicar Registro Anterior
-                  </Button>
+          {/* Step 2: Only show project area after time point is saved */}
+          {!showProjectsArea && !hasTimePoint && (
+            <Card className="bg-muted/30">
+              <CardContent className="pt-6">
+                <div className="text-center text-muted-foreground text-sm">
+                  <p>Primeiro, defina e salve o ponto do dia para adicionar projetos.</p>
                 </div>
               </CardContent>
             </Card>
@@ -840,20 +849,50 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
               <CardContent className="space-y-2">
                 {draftEntries.map((entry, index) => (
                   <div key={entry.id} className="flex items-center justify-between p-2 bg-muted/30 rounded">
-                    <div className="text-sm">
+                    <div className="text-sm flex-1">
                       <div className="font-medium">{entry.project}</div>
+                      {entry.stage && (
+                        <div className="text-xs text-muted-foreground">Etapa: {entry.stage}</div>
+                      )}
+                      {entry.task && (
+                        <div className="text-xs text-muted-foreground">Tarefa: {entry.task}</div>
+                      )}
                       <div className="text-xs text-muted-foreground">
-                        {entry.hours}h {(entry.minutes || 0) > 0 && `${entry.minutes}min`}
+                        {entry.hours}h {(entry.minutes || 0) > 0 && `${entry.minutes}min`} ({entry.percentage?.toFixed(1)}%)
                       </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeDraftEntry(entry.id!)}
-                      className="text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          // Edit functionality - move back to form
+                          setNewEntry({
+                            project: entry.project || '',
+                            projectId: entry.projectId || '',
+                            stage: entry.stage || '',
+                            stageId: entry.stageId || '',
+                            task: entry.task || '',
+                            taskId: entry.taskId || '',
+                            hours: entry.hours || 0,
+                            minutes: entry.minutes || 0,
+                            percentage: entry.percentage || 0,
+                          });
+                          removeDraftEntry(entry.id!);
+                        }}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeDraftEntry(entry.id!)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </CardContent>
@@ -870,7 +909,7 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
               </CardHeader>
               <CardContent className="space-y-3">
                 {entries.map((entry, index) => (
-                  <div key={entry.id}>
+                    <div key={entry.id}>
                     <div className="flex items-start justify-between p-3 bg-muted/50 rounded-lg">
                       <div className="space-y-1 flex-1">
                         <div className="font-medium text-sm">{entry.project}</div>
@@ -881,21 +920,45 @@ export default function TimeEntryPanel({ date, onClose, onSave, existingData }: 
                         )}
                         {entry.task && (
                           <div className="text-xs text-muted-foreground">
-                            {entry.task}
+                            Tarefa: {entry.task}
                           </div>
                         )}
                         <div className="text-sm font-medium text-primary">
                           {entry.hours}h {entry.minutes > 0 && `${entry.minutes}min`} ({entry.percentage?.toFixed(1)}%)
                         </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeEntry(entry.id)}
-                        className="text-destructive hover:text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            // Edit functionality - move back to form
+                            setNewEntry({
+                              project: entry.project || '',
+                              projectId: entry.projectId || '',
+                              stage: entry.stage || '',
+                              stageId: entry.stageId || '',
+                              task: entry.task || '',
+                              taskId: entry.taskId || '',
+                              hours: entry.hours || 0,
+                              minutes: entry.minutes || 0,
+                              percentage: entry.percentage || 0,
+                            });
+                            removeEntry(entry.id);
+                          }}
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeEntry(entry.id)}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                     {index < entries.length - 1 && <Separator className="mt-3" />}
                   </div>
